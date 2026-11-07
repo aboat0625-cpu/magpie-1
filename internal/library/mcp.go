@@ -55,6 +55,10 @@ type Server struct {
 	// and list its tools: Codex's startup_timeout_sec (#3168), the only
 	// agent given it. 0 leaves it to the agent (Codex's own is 30s).
 	StartupTimeout int `json:"startupTimeout,omitempty"`
+	// ToolTimeout is the shared router's complete tool-call budget in seconds,
+	// including connecting to the backend. 0 keeps its default 50 seconds.
+	// Agents must also allow this long for their connection to the router.
+	ToolTimeout int `json:"toolTimeout,omitempty"`
 	// Local keeps the server to this computer (huhuy72219405 on X: a
 	// server of a program or folder only this computer has). A backup or
 	// a sync never carries it, and one coming in neither takes it away nor
@@ -169,6 +173,9 @@ func (s *Server) check() error {
 	}
 	if s.StartupTimeout < 0 || s.StartupTimeout > maxStartupTimeout {
 		return fmt.Errorf("%s: the startup timeout is between 0 (the agent's own) and %d seconds", s.Name, maxStartupTimeout)
+	}
+	if s.ToolTimeout < 0 || s.ToolTimeout > maxToolTimeout {
+		return fmt.Errorf("%s: the tool timeout is between 0 (the router's default) and %d seconds", s.Name, maxToolTimeout)
 	}
 	for k := range s.Env {
 		if strings.TrimSpace(k) == "" {
@@ -456,6 +463,9 @@ func selfTimeout(s *Server, def int) int {
 // maxStartupTimeout is the longest startup timeout a server is given: a
 // day, as a hook's timeout.
 const maxStartupTimeout = 86400
+
+// A configured call stays finite, including when imported from another machine.
+const maxToolTimeout = 86400
 
 // startupTheirs says whether old, a Codex entry, has a startup timeout
 // magpie didn't write: a startup_timeout_ms (magpie writes only _sec, and

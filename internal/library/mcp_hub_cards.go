@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/yetone/magpie/internal/gateway"
 	"github.com/yetone/magpie/internal/settings"
@@ -177,6 +178,11 @@ func writeCards(m map[string]hubCard) {
 // turned off, as it last listed them.
 func hubServerOf(s *Server) gateway.HubServer {
 	out := gateway.HubServer{Name: s.Name, About: serverAbout(s), Bridge: s.Bridge != "", HereOnly: hereOnly(s), Program: s.Plugin != "" || !s.Remote(), Keyed: keepsSession(s) && !s.Remote()}
+	// A manually edited library is loaded without check; invalid budgets
+	// still fall back to the finite default rather than overflowing a duration.
+	if s.ToolTimeout > 0 && s.ToolTimeout <= maxToolTimeout {
+		out.ToolTimeout = time.Duration(s.ToolTimeout) * time.Second
+	}
 	c := cardOf(s)
 	if c == nil {
 		return out

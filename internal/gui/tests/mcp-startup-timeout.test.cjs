@@ -24,7 +24,7 @@ function server(lang, calls, agents) {
     dir: `${HOME}/.magpie/library`, backups: `${HOME}/.magpie/backups`, home: HOME,
     agents,
     instructions: { agents: [], sets: [] }, foundServers: [], projects: [], foundSkills: [], skills: [],
-    servers: [{ name: "slow", transport: "stdio", command: "npx", args: ["-y", "slow-mcp"], agents: agents.map((a) => a.id) }],
+    servers: [{ name: "slow", transport: "stdio", command: "npx", args: ["-y", "slow-mcp"], toolTimeout: 450, agents: agents.map((a) => a.id) }],
   };
   return async (route) => {
     const req = route.request(), url = new URL(req.url());
@@ -36,6 +36,7 @@ function server(lang, calls, agents) {
     if (url.pathname === "/api/library/mcp/check") return route.fulfill({ json: { servers: {} } });
     if (url.pathname === "/api/library/servers/save") {
       const { old, server: s } = req.postDataJSON();
+      assert.equal(s.toolTimeout, 450, "editing startup settings discarded the shared tool-call budget");
       calls.push(s.name + " " + s.startupTimeout);
       const i = lib.servers.findIndex((x) => x.name === old);
       lib.servers[i] = { ...lib.servers[i], ...s };

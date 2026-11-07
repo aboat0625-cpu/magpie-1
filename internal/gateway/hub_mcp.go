@@ -119,6 +119,8 @@ type Hub interface {
 // is what it is for, "" when magpie doesn't know.
 type HubServer struct {
 	Name, About string
+	// ToolTimeout is this server's shared call budget; zero keeps hubCallWait.
+	ToolTimeout time.Duration
 	// Title is the name the server gives itself (initialize's
 	// serverInfo.title), "" when it gives none: another magpie's router
 	// says "Magpie MCP hub · <its name>"
@@ -256,8 +258,9 @@ var MCPHub Hub
 
 // The hub's budgets: tools/list waits for the servers this long (a server
 // still starting is left out, and listed once it has), and a call this
-// long, under the 60s an MCP client waits for an answer, for the agent to
-// be told which server didn't answer rather than its own timeout.
+// long by default, under the 60s an MCP client waits for an answer. A
+// server can opt into a longer complete call budget; its caller must also
+// allow that long. Caller cancellation is never extended by the budget.
 var (
 	hubListWait = 40 * time.Second
 	hubCallWait = 50 * time.Second
@@ -730,13 +733,20 @@ func (s *Server) hubMCPRun(r *http.Request, agent string, t hubTool, args json.R
 	if len(args) == 0 || string(args) == "null" {
 		args = json.RawMessage(`{}`)
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), hubCallWait)
+	wait := hubCallWait
+	for _, server := range MCPHub.Servers(agent) {
+		if server.Name == t.Server && server.ToolTimeout > 0 {
+			wait = server.ToolTimeout
+			break
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), wait)
 	defer cancel()
 	res, err := MCPHub.Call(ctx, agent, t.Server, t.Tool, args)
 	if err != nil {
 		why := err.Error()
 		if ctx.Err() != nil && r.Context().Err() == nil {
-			why = "it didn't answer in " + hubCallWait.String()
+			why = "it didn't answer in " + wait.String()
 		}
 		return toolResult("The MCP server "+t.Server+" couldn't run "+t.Tool+": "+why, true)
 	}
